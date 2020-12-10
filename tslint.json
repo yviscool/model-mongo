@@ -3,6 +3,7 @@
   "rules":{
     "triple-equals": [ false, "allow-null-check" ],
     "no-constant-condition": false,
-    "ter-newline-after-var": true
+    "ter-newline-after-var": true,
+    "no-unused-expression": false 
   }
 }

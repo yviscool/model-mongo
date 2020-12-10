@@ -1,8 +1,7 @@
-import ModelMongo from "./query";
-
+import ModelMongo from './query';
 
 // Require dependencies
-const pluralize = require('pluralize');
+import pluralize from 'pluralize';
 
 /**
  * Get the appropriate collection ID for a Model
@@ -22,7 +21,6 @@ function modelInstanceCollectionId(model) {
  * Internal DB API class
  */
 class DB {
-
 
   private _plug: ModelMongo;
 

@@ -4,7 +4,7 @@ import * as assert from 'power-assert'
 import * as request from 'supertest';
 import * as http from 'http';
 
-import Router from '../src';
+import Model from '../src';
 
 import * as Koa from "koa";
 

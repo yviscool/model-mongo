@@ -1,5 +1,5 @@
-import Model from "..";
-import Db from "./db";
+import Model from '..';
+import Db from './db';
 
 /**
  * Flatten an object replacing nested structures with dotprop keys
@@ -8,7 +8,7 @@ function flatifyObj(obj) {
   const flatObj = {};
 
   function iterate(iteratedObj, path = '', level = 0) {
-    for (const [prop, propVal] of Object.entries(iteratedObj)) {
+    for (const [ prop, propVal ] of Object.entries(iteratedObj)) {
       const fullPath = (path.length > 0 ? `${path}.${prop}` : `${prop}`);
 
       // level can only go so deep
@@ -31,7 +31,6 @@ function flatifyObj(obj) {
  * Query builder class
  */
 class DbQuery {
-
 
   private _Model: Model;
   private _db: Db;
@@ -134,7 +133,7 @@ class DbQuery {
   /**
    * search
    *
-   * @param {*} value 
+   * @param {*} value
    */
   search(value) {
     // add to where
@@ -152,10 +151,10 @@ class DbQuery {
       // Handle arg
       const filter = key;
       // Push query part for `filter` and return self
+
       this.pts.push({ type: 'filter', filter: flatifyObj(filter) });
       return this;
     }
-
 
     // Push query part for `filter` and return self
     this.pts.push({ type: 'filter', filter: { [key]: value } });
@@ -165,7 +164,7 @@ class DbQuery {
   /**
    * Filter only Model instances where the specified key does not match the specified val
    */
-  ne(key, value) {
+  ne(key?, value?) {
     // Push query part for `ne` and return self
     this.pts.push({ type: 'ne', val: value, key });
     return this;
@@ -174,7 +173,7 @@ class DbQuery {
   /**
    * Filter only Model instances where the specified keys do not match the specified val
    */
-  nin(key, values) {
+  nin(key?, values?) {
     // Push query part for `nin` and return self
     this.pts.push({ type: 'nin', vals: values, key });
     return this;
@@ -183,7 +182,7 @@ class DbQuery {
   /**
    * Filter only Model instances where the specified keys match the specified val
    */
-  in(key, values) {
+  in(key?, values?) {
     // Push query part for `in` and return self
     this.pts.push({ type: 'in', vals: values, key });
     return this;
@@ -192,7 +191,7 @@ class DbQuery {
   /**
    * Alias of `where`
    */
-  match(key, value = null) {
+  match(key?, value = null) {
     return this.where(key, value);
   }
 
@@ -205,7 +204,6 @@ class DbQuery {
     this.pts.push({ type: 'whereOr', matches: matches.map(match => flatifyObj(match)) });
     return this;
   }
-
 
   /**
    * Filter only Model instances by filter using multiple filter objects, where all have to match
@@ -220,7 +218,7 @@ class DbQuery {
    * Only return Model instances where the value of the
    * specified key is greater than the specified amount
    */
-  gt(key, min) {
+  gt(key?, min?) {
     // Push query part for `gt` and return self
     this.pts.push({ type: 'gt', min, key });
     return this;
@@ -230,7 +228,7 @@ class DbQuery {
    * Only return model instances where the value of the
    * specified key is less than the specified amount
    */
-  lt(key, max) {
+  lt(key?, max?) {
     // Push query part for `lt` and return self
     this.pts.push({ type: 'lt', max, key });
     return this;
@@ -240,7 +238,7 @@ class DbQuery {
    * Only return Model instances where the value of the specified
    * key is greater or equal to than the specified amount
    */
-  gte(key, min) {
+  gte(key?, min?) {
     // Push query part for `gte` and return self
     this.pts.push({ type: 'gte', min, key });
     return this;
@@ -250,7 +248,7 @@ class DbQuery {
    * Only return model instances where the value of the specified
    * key is less than or equal to the specified amount
    */
-  lte(key, max) {
+  lte(key?, max?) {
     // Push query part for `lte` and return self
     this.pts.push({ type: 'lte', max, key });
     return this;

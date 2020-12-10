@@ -19,9 +19,9 @@ class Model extends EventEmitter {
 
     private __data: any;
     private __updates: Set<string>;
-    private __id: ObjectId
+    private __id: ObjectId;
     /**
-     * 
+     *
      * @param  {...any} args
      */
     constructor(data = {}, id = null) {
@@ -38,18 +38,17 @@ class Model extends EventEmitter {
         this.__id = id;
 
         // data methods
-        ['get', 'set', 'unset', 'push', 'add', 'subtract', 'increment', 'decrement'].forEach((method) => {
+        [ 'get', 'set', 'unset', 'push', 'add', 'subtract', 'increment', 'decrement' ].forEach(method => {
             // bind
             this[method] = this[method].bind(this);
         });
 
         // save/remove methods
-        ['save', 'replace', 'remove', 'refresh'].forEach((method) => {
+        [ 'save', 'replace', 'remove', 'refresh' ].forEach(method => {
             // bind
             this[method] = this[method].bind(this);
         });
     }
-
 
     // ////////////////////////////////////////////////////////////////////////////
     //
@@ -68,7 +67,7 @@ class Model extends EventEmitter {
     /**
      * init database
      *
-     * @param {*} plug 
+     * @param {*} plug
      */
     static init(plug) {
         // init database plug
@@ -79,9 +78,9 @@ class Model extends EventEmitter {
     /**
      * creates index
      *
-     * @param {*} Model 
-     * @param {*} name 
-     * @param {*} indexes 
+     * @param {*} Model
+     * @param {*} name
+     * @param {*} indexes
      */
     static async index(Model, name, indexes) {
         // init database plug
@@ -91,9 +90,9 @@ class Model extends EventEmitter {
     /**
      * creates index
      *
-     * @param {*} Model 
-     * @param {*} name 
-     * @param {*} indexes 
+     * @param {*} Model
+     * @param {*} name
+     * @param {*} indexes
      */
     static async createIndex(name, indexes) {
         // init database plug
@@ -103,13 +102,12 @@ class Model extends EventEmitter {
     /**
      * registers collection
      *
-     * @param {*} Model 
+     * @param {*} Model
      */
     static async register(Model) {
         // init database plug
         return DATA.db.initCollection(Model);
     }
-
 
     // ////////////////////////////////////////////////////////////////////////////
     //
@@ -120,9 +118,9 @@ class Model extends EventEmitter {
     /**
      * gets value
      *
-     * @param {*} key 
+     * @param {*} key
      */
-    get(key) {
+    get(key: string| object) {
         // return copied set of data
         if (!key) {
             return Object.assign({}, this.__data);
@@ -134,20 +132,20 @@ class Model extends EventEmitter {
         }
 
         // return dotprop key
-        return dotProp.get(this.__data, key);
+        return dotProp.get(this.__data, key as string);
     }
 
     /**
      * sets value
      *
-     * @param {*} key 
-     * @param {*} value 
+     * @param {*} key
+     * @param {*} value
      */
-    set(key, value = null) {
+    set(key: string | object, value = null) {
         // if object, set each key
         if (key instanceof Object && value == null) {
             // keys map
-            Object.keys(key).forEach((k) => {
+            Object.keys(key).forEach(k => {
                 // set
                 this.set(k, key[k]);
             });
@@ -157,25 +155,25 @@ class Model extends EventEmitter {
         }
 
         // add change to internal updates set
-        this.__updates.add(key);
+        this.__updates.add(key as string);
 
         // set internal value selected by dot-prop key
-        dotProp.set(this.__data, key, value);
+        dotProp.set(this.__data, key as string, value);
     }
 
     /**
      * adds to field
      *
-     * @param {*} key 
-     * @param {*} amt 
+     * @param {*} key
+     * @param {*} amt
      */
-    add(key, amt = '0.00') {
+    add(key: string, amt) {
         // get current value of prop selected by dot-prop key
-        let currValue = dotProp.get(this.__data, key) || '0.00';
+        let currValue: any = dotProp.get(this.__data, key) || '0.00';
 
         // set amount
-        if (typeof amt === Number) amt = money.floatToAmount(amt);
-        if (typeof currValue === Number) currValue = money.floatToAmount(currValue);
+        if (typeof amt === 'number') amt = money.floatToAmount(amt);
+        if (typeof currValue === 'number') currValue = money.floatToAmount(currValue);
 
         // add change to internal updates set
         this.__updates.add(key);
@@ -187,16 +185,16 @@ class Model extends EventEmitter {
     /**
      * subtracts from field
      *
-     * @param {*} key 
-     * @param {*} amt 
+     * @param {*} key
+     * @param {*} amt
      */
-    subtract(key, amt = '0.00') {
+    subtract(key: string, amt) {
         // get current value of prop selected by dot-prop key
-        let currValue = dotProp.get(this.__data, key) || '0.00';
+        let currValue: any = dotProp.get(this.__data, key) || '0.00';
 
         // set amount
-        if (typeof amt === Number) amt = money.floatToAmount(amt);
-        if (typeof currValue === Number) currValue = money.floatToAmount(currValue);
+        if (typeof amt === 'number') amt = money.floatToAmount(amt);
+        if (typeof currValue === 'number') currValue = money.floatToAmount(currValue);
 
         // add change to internal updates set
         this.__updates.add(key);
@@ -208,13 +206,13 @@ class Model extends EventEmitter {
     /**
      * unsets key
      *
-     * @param {*} key 
+     * @param {*} key
      */
-    unset(key = null) {
+    unset(key: string | any[] = null) {
         // if only argument is an Array, iterate it as array of keys to remove
         if (key instanceof Array) {
             // each
-            key.forEach((k) => {
+            key.forEach(k => {
                 dotProp.delete(this.__data, k);
                 this.__updates.add(k);
             });
@@ -233,12 +231,12 @@ class Model extends EventEmitter {
     /**
      * increments field
      *
-     * @param {*} key 
-     * @param {*} amt 
+     * @param {*} key
+     * @param {*} amt
      */
-    increment(key, amt = 1) {
+    increment(key: string, amt = 1) {
         // get current value of prop selected by dot-prop key
-        const currValue = dotProp.get(this.__data, key) || 0;
+        const currValue: number = dotProp.get(this.__data, key) || 0;
 
         // set value of prop selected by dot-prop key to be plus the increment amount (default 1)
         dotProp.set(this.__data, key, currValue + amt);
@@ -250,12 +248,12 @@ class Model extends EventEmitter {
     /**
      * decrement
      *
-     * @param {*} key 
-     * @param {*} amt 
+     * @param {*} key
+     * @param {*} amt
      */
-    decrement(key, amt = 1) {
+    decrement(key: string, amt = 1) {
         // get current value of prop selected by dot-prop key
-        const currValue = dotProp.get(this.__data, key) || 0;
+        const currValue: number = dotProp.get(this.__data, key) || 0;
 
         // set value of prop selected by dot-prop key to be minus the increment amount (default 1)
         dotProp.set(this.__data, key, currValue - amt);
@@ -267,15 +265,15 @@ class Model extends EventEmitter {
     /**
      * push to array
      *
-     * @param {*} key 
-     * @param {*} val 
+     * @param {*} key
+     * @param {*} val
      */
-    push(key, val) {
+    push(key: string, val) {
         // Get current value of prop selected by dot-prop key
         const currValue = dotProp.get(this.__data, key) || [];
 
         // Ensure currValue is not an existing non-array field
-        assert.instanceOf(currValue, Array, "Can't push to non-array field");
+        assert(Array.isArray(currValue), "Can't push to non-array field");
 
         // Push to array
         currValue.push(val);
@@ -286,7 +284,6 @@ class Model extends EventEmitter {
         // Add change to internal updates set
         this.__updates.add(key);
     }
-
 
     // ////////////////////////////////////////////////////////////////////////////
     //
@@ -347,7 +344,6 @@ class Model extends EventEmitter {
         // Reset internally stored updates
         this.__updates = new Set();
     }
-
 
     // ////////////////////////////////////////////////////////////////////////////
     //
