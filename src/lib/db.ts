@@ -53,22 +53,22 @@ class DB {
   /**
    * Get a plug-specific raw cursor
    */
-  async getRawCursor(...args) {
-    return this._plug.getRawCursor(...args);
+  async getRawCursor(collectionId: string, ...args) {
+    return this._plug.getRawCursor(collectionId, ...args);
   }
 
   /**
    * Get a plug-specific raw table
    */
-  async getRawTable(...args) {
-    return this._plug.getRawTable(...args);
+  async getRawTable(collectionId: string, ...args) {
+    return this._plug.getRawTable(collectionId, ...args);
   }
 
   /**
    * Get a plug-specific raw DB
    */
-  async getRawDb(...args) {
-    return this._plug.getRawDb(...args);
+  async getRawDb() {
+    return this._plug.getRawDb();
   }
 
   /**

@@ -3,7 +3,7 @@
 
 // Require dependencies
 import MQuery from 'mquery';
-import { MongoClient, ObjectId, Db } from 'mongodb';
+import { MongoClient, ObjectId, Db, Collection, DbCollectionOptions, MongoCallback } from 'mongodb';
 
 interface MongodbConfig {
     url: string;
@@ -80,7 +80,7 @@ class ModelMongo {
         // MongoDB just works, we dont need to do anything
     }
 
-    async createIndex(collectionId, name, indexes) {
+    async createIndex(collectionId: string, name, indexes) {
         await this.building;
 
         // TODO: please standardization i am suicidal
@@ -94,17 +94,17 @@ class ModelMongo {
     /**
     * Return a copy of a raw cursor by provided collectionId
     */
-    async getRawCursor(collectionId) {
+    async getRawCursor(collectionId: string, options?: DbCollectionOptions, callback?: MongoCallback<Collection>): MQuery {
         await this.building;
-        return MQuery(this._db.collection(collectionId));
+        return MQuery(this._db.collection(collectionId, options, callback));
     }
 
     /**
     * Return a copy of a raw table by provided collectionId
     */
-    async getRawTable(collectionId) {
+    async getRawTable(collectionId: string, options?: DbCollectionOptions, callback?: MongoCallback<Collection>): Promise<Collection> {
         await this.building;
-        return this._db.collection(collectionId);
+        return this._db.collection(collectionId, options, callback);
     }
 
     /**
@@ -205,7 +205,7 @@ class ModelMongo {
     /**
      * Find Model data by collection ID and Model ID
      */
-    async findById(collectionId, id) {
+    async findById(collectionId: string, id: string) {
         // Wait for building to finish
         await this.building;
 
@@ -213,7 +213,7 @@ class ModelMongo {
         const mQuery = MQuery(this._db.collection(collectionId));
 
         // Find single Model instance data by provided ID
-        const rawModelRes = await mQuery.findOne({ _id: ObjectId(id) }).exec();
+        const rawModelRes = await mQuery.findOne({ _id: new ObjectId(id) }).exec();
 
         // If no Model instance data found, return null
         if (rawModelRes == null) {
@@ -242,7 +242,7 @@ class ModelMongo {
      * @param {*} collectionId 
      * @param {*} query 
      */
-    raw(collectionId, query) {
+    raw(collectionId: string, query) {
         // Wait for building to finish
         this.building;
 
@@ -260,7 +260,7 @@ class ModelMongo {
      * @param {*} collectionId 
      * @param {*} query 
      */
-    exec(collectionId, action, ...args) {
+    exec(collectionId: string, action?, ...args) {
         // Wait for building to finish
         this.building;
 
@@ -268,7 +268,7 @@ class ModelMongo {
         const collection = this._db.collection(collectionId);
 
         // return promise
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             // execute
             collection[action](...args).toArray((err, data) => {
                 // reject error
@@ -283,7 +283,7 @@ class ModelMongo {
     /**
      * Find Model data by collection ID and constructed query
      */
-    async find(collectionId, query) {
+    async find(collectionId: string, query) {
         // Wait for building to finish
         await this.building;
 
@@ -313,7 +313,7 @@ class ModelMongo {
     /**
      * Find single Model data by collection ID and Model ID
      */
-    async findOne(collectionId, query) {
+    async findOne(collectionId: string, query) {
         // Wait for building to finish
         await this.building;
 
@@ -347,7 +347,7 @@ class ModelMongo {
     /**
      * Get count of Model data by collection ID and constructed query
      */
-    async count(collectionId, query) {
+    async count(collectionId: string, query) {
         // Wait for building to finish
         await this.building;
 
@@ -363,7 +363,7 @@ class ModelMongo {
      * Get sum of data by provided key of all matching Model data
      * by collection ID and constructed query
      */
-    async sum(collectionId, query, key) {
+    async sum(collectionId: string, query, key) {
         // Wait for building to finish
         await this.building;
 
@@ -378,7 +378,7 @@ class ModelMongo {
     /**
      * Remove matching Model data from database by collection ID and Model ID
      */
-    async removeById(collectionId, id) {
+    async removeById(collectionId: string, id) {
         // Wait for building to finish
         await this.building;
 
@@ -386,13 +386,13 @@ class ModelMongo {
         const mQuery = MQuery(this._db.collection(collectionId));
 
         // Find and remove single Model instance data by provided ID
-        await mQuery.findOneAndRemove({ _id: ObjectId(id) }).exec();
+        await mQuery.findOneAndRemove({ _id: new ObjectId(id) }).exec();
     }
 
     /**
      * Remove matching Model data from database by collection ID and constructed query
      */
-    async remove(collectionId, query) {
+    async remove(collectionId: string, query) {
         // Wait for building to finish
         await this.building;
 
@@ -406,7 +406,7 @@ class ModelMongo {
     /**
      * Replace matching Model data from database by collection ID, Model ID, and replacement data
      */
-    async replaceById(collectionId, id, newObject) {
+    async replaceById(collectionId: string, id: string, newObject) {
         // Wait for building to finish
         await this.building;
 
@@ -414,7 +414,7 @@ class ModelMongo {
         const mQuery = MQuery(this._db.collection(collectionId));
 
         // Find and update Model instance data by provided ID and replacement object
-        await mQuery.where({ _id: ObjectId(id) }).setOptions({ overwrite: true })
+        await mQuery.where({ _id: new ObjectId(id) }).setOptions({ overwrite: true })
             .update(newObject).exec();
     }
 
@@ -422,7 +422,7 @@ class ModelMongo {
      * Update matching Model data from database by collection ID, Model ID, replacement data,
      * and set of updated keys
      */
-    async updateById(collectionId, id, newObject, updates) {
+    async updateById(collectionId: string, id: string, newObject: any, updates: string) {
         // Wait for building to finish
         await this.building;
 
@@ -430,10 +430,10 @@ class ModelMongo {
         const topLevelUpdates = new Set(Array.from(updates).map(update => update.split('.')[0]));
 
         // Create new object for storing only updated keys
-        const replaceObject = {};
+        const replaceObject: any = {};
 
         // Create new object for storing only unset keys
-        const unsetObject = {};
+        const unsetObject: any = {};
 
         // Iterate updated keys
         for (const updatedKey of topLevelUpdates) {
@@ -453,13 +453,13 @@ class ModelMongo {
         const mQuery = MQuery(this._db.collection(collectionId));
 
         // Find and update Model instance data by provided ID and replacement object
-        await mQuery.where({ _id: ObjectId(id) }).update(replaceObject).exec();
+        await mQuery.where({ _id: new ObjectId(id) }).update(replaceObject).exec();
     }
 
     /**
      * Insert Model data from database by collection ID and return Model ID
      */
-    async insert(collectionId, object) {
+    async insert(collectionId: string, object) {
         // Wait for building to finish
         await this.building;
 
@@ -468,7 +468,7 @@ class ModelMongo {
 
         // Convert _id to ObjectId if present
         if (object._id !== null && object._id !== undefined) {
-            object._id = ObjectId(object._id);
+            object._id = new ObjectId(object._id);
         }
 
         // Insert Model instance data into database and get inserted ID

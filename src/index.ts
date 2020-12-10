@@ -15,7 +15,7 @@ const DATA = {
 /**
  * eden model
  */
-class EdenModel extends EventEmitter {
+class Model extends EventEmitter {
 
     private __data: any;
     private __updates: Set<string>;
@@ -396,13 +396,13 @@ class EdenModel extends EventEmitter {
      * Query constructor methods
      */
     // Create a query builder with initial `limit` set
-    static limit(...args) { return this.__query().limit(...args); }
+    static limit(amt: number) { return this.__query().limit(amt); }
 
     // Create a query builder with initial `elem` set
     static elem(...args) { return this.__query().elem(...args); }
 
     // Create a query builder with initial `skip` set
-    static skip(...args) { return this.__query().skip(...args); }
+    static skip(amt: number) { return this.__query().skip(amt); }
 
     // Create a query builder with initial `sort` set
     static sort(...args) { return this.__query().sort(...args); }
@@ -442,4 +442,4 @@ class EdenModel extends EventEmitter {
 }
 
 // export model
-exports = module.exports = EdenModel;
+export default Model;

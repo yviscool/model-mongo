@@ -1,3 +1,5 @@
+import Model from "..";
+import Db from "./db";
 
 /**
  * Flatten an object replacing nested structures with dotprop keys
@@ -29,6 +31,14 @@ function flatifyObj(obj) {
  * Query builder class
  */
 class DbQuery {
+
+
+  private _Model: Model;
+  private _db: Db;
+
+  // Query parts
+  public pts = [];
+
   /**
    * Construct query builder class
    */
@@ -38,9 +48,6 @@ class DbQuery {
 
     // Store internal copy of the DB API
     this._db = db;
-
-    // Query parts
-    this.pts = [];
 
     // Bind all public building methods to self
     this.gt = this.gt.bind(this);
@@ -73,7 +80,7 @@ class DbQuery {
   /**
    * Set maximum returned Model instances
    */
-  limit(amt) {
+  limit(amt: number) {
     // Push query part for `limit` and return self
     this.pts.push({ type: 'limit', limitAmount: amt });
     return this;
@@ -82,7 +89,7 @@ class DbQuery {
   /**
    * Filter by if element matches in array
    */
-  elem(arrKey, filter) {
+  elem(arrKey?, filter?) {
     // Push query part for `elem` and return self
     this.pts.push({ type: 'elem', arrKey, filter });
     return this;
@@ -91,7 +98,7 @@ class DbQuery {
   /**
    * Skip the first specified amount of returned Model instances
    */
-  skip(amt) {
+  skip(amt: number) {
     // Push query part for `skip` and return self
     this.pts.push({ type: 'skip', skipAmount: amt });
     return this;
@@ -100,7 +107,7 @@ class DbQuery {
   /**
    * Sort returned Model instances by a key and optional direction (default descending)
    */
-  sort(key, directionStr = 'desc') {
+  sort(key?, directionStr = 'desc') {
     // Ensure directionStr is a String value
     directionStr = directionStr.toString();
 
@@ -139,7 +146,7 @@ class DbQuery {
    * Filter only Model instances where the specified key matches
    * the specified val, can also be given a filter object
    */
-  where(key, value = null) {
+  where(key?, value = null) {
     // If only argument is an Object, handle as a filter object
     if (key instanceof Object && value == null) {
       // Handle arg
