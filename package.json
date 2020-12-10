@@ -41,8 +41,11 @@
   },
   "dependencies": {
     "debug": "^4.1.1",
+    "dot-prop": "^6.0.1",
+    "money-math": "^2.5.1",
     "mongodb": "^3.6.3",
-    "mquery": "^3.2.2"
+    "mquery": "^3.2.2",
+    "pluralize": "^8.0.0"
   },
   "devDependencies": {
     "@types/koa": "^2.0.48",

@@ -1,680 +1,445 @@
-// Require dependencies
-import MQuery from 'mquery';
-import { MongoClient, ObjectId, Db } from 'mongodb';
+import * as money from 'money-math';
+import { EventEmitter } from 'events';
+import { ObjectId } from 'mongodb';
+import * as dotProp from 'dot-prop';
+import * as assert from 'assert';
+import DB from './lib/db';
+import Query from './lib/dbquery';
 
-import * as  Knex from 'knex';
-
-
-
-const knex = Knex({
-    client: 'mysql2',
-    connection: {
-        // debug: ['ComQueryPacket'],
-        host: "39.98.203.72",
-        user: "root",
-        password: "chenxing2019",
-        database: 'center'
-    },
-});
-
-// knex('zjl').where({id:1}).first();
-
-
-interface MongodbConfig {
-    url: string;
-    db?: string;
-}
+// data
+const DATA = {
+    db: null,
+    plug: null,
+};
 
 /**
- * MongoDb database plug class
+ * eden model
  */
-class ModelMongo {
+class EdenModel extends EventEmitter {
 
-    private _config: MongodbConfig;
-    private _client: MongoClient;
-    private _db: Db;
-    private pts = [];
-    building: Promise<void>;
-
+    private __data: any;
+    private __updates: Set<string>;
+    private __id: ObjectId
     /**
-     * Construct MongoDb database plug class
+     * 
+     * @param  {...any} args
      */
-    constructor(config: MongodbConfig) {
-        // Store config
-        this._config = config;
+    constructor(data = {}, id = null) {
+        // run super
+        super();
 
-        // Bind builder to self
-        this.build = this.build.bind(this);
+        // Set internal data from provided argument
+        this.__data = data;
 
-        // Bind raw methods to self
-        this.getRawDb = this.getRawDb.bind(this);
-        this.getRawTable = this.getRawTable.bind(this);
-        this.getRawCursor = this.getRawCursor.bind(this);
+        // Internal array for storing updates
+        this.__updates = new Set();
 
-        // Bind internal methods to self
-        this._queryToCursor = this._queryToCursor.bind(this);
+        // Set internal ID from provided argument
+        this.__id = id;
 
-        // Bind public methods to self
-        this.raw = this.raw.bind(this);
-        this.find = this.find.bind(this);
-        this.count = this.count.bind(this);
-        this.remove = this.remove.bind(this);
-        this.insert = this.insert.bind(this);
-        this.findOne = this.findOne.bind(this);
-        this.findById = this.findById.bind(this);
-        this.removeById = this.removeById.bind(this);
-        this.replaceById = this.replaceById.bind(this);
-
-        // Start building internal connections and store promise
-        this.building = this.build();
-    }
-
-    /**
-     * Async method that resolves on internal API build completion
-     */
-    async build() {
-        // create client
-        this._client = await new Promise((resolve, reject) => {
-            // connect
-            MongoClient.connect(this._config.url, { useNewUrlParser: true, useUnifiedTopology: true }, (err, client) => {
-                // reject
-                if (err) return reject(err);
-
-                // resolve client
-                resolve(client);
-            });
+        // data methods
+        ['get', 'set', 'unset', 'push', 'add', 'subtract', 'increment', 'decrement'].forEach((method) => {
+            // bind
+            this[method] = this[method].bind(this);
         });
 
-        // Internally store db by name provided in config
-        this._db = this._client.db(this._config.db);
-    }
-
-    /**
-     * Prepare database for new collection of provided collection ID
-     */
-    initCollection() {
-        // MongoDB just works, we dont need to do anything
-    }
-
-    async createIndex(collectionId, name: string, indexes: any) {
-        await this.building;
-
-        // TODO: please standardization i am suicidal
-        try {
-            await this._db.collection(collectionId).createIndex(indexes, {
-                name,
-            });
-        } catch (err) { /* who care */ }
-    }
-
-    /**
-    * Return a copy of a raw cursor by provided collectionId
-    */
-    async getRawCursor(collectionId) {
-        await this.building;
-        return MQuery(this._db.collection(collectionId));
-    }
-
-    /**
-    * Return a copy of a raw table by provided collectionId
-    */
-    async getRawTable(collectionId) {
-        await this.building;
-        return this._db.collection(collectionId);
-    }
-
-    /**
-    * Return a copy of the raw internal database
-    */
-    async getRawDb() {
-        await this.building;
-        return this._db;
-    }
-
-    /**
-     * Convert a standard constructed query to an MQuery cursor
-     */
-    _queryToCursor(cursor, query) {
-        let neBuf = [];
-
-        // Iterate over all parts of the query
-        for (const [queryPtKey, queryPt] of query.pts.entries()) {
-            if (queryPt.type === 'filter') {
-                const filter = Object.assign({}, queryPt.filter);
-
-                // Iterate all values in the filter object
-                for (const [filterKey, filterVal] of Object.entries(filter)) {
-                    // If value data is a RegExp match, handle seperately
-                    if (filterVal instanceof RegExp) {
-                        // Delete by key from filter object
-                        delete filter[filterKey];
-                        // Apply key and regex match to `where` and `regex` cursor method
-                        cursor = cursor.where(filterKey).regex(filterVal);
-                    }
-                }
-
-                // Apply filter object to `where` cursor method
-                cursor = cursor.where(filter);
-            } else if (queryPt.type === 'elem') {
-                if (typeof queryPt.filter !== 'object') {
-                    // Apply supplied matches array to `where` and `elemMatch` cursor method
-                    cursor = cursor.where(queryPt.arrKey).elemMatch({
-                        $eq: queryPt.filter,
-                    });
-                } else {
-                    // Apply supplied matches array to `where` and `elemMatch` cursor method
-                    cursor = cursor.where(queryPt.arrKey).elemMatch(queryPt.filter);
-                }
-            } else if (queryPt.type === 'ne') {
-                const nextPt = query.pts[queryPtKey + 1];
-
-                if (nextPt != null && nextPt.type === 'ne' && nextPt.key === queryPt.key) {
-                    neBuf.push(queryPt.val);
-                } else if (neBuf.length > 0) {
-                    // Apply supplied negative match and previous
-                    // matches array to `where` and `nin` cursor method
-                    cursor = cursor.where(queryPt.key).nin([...neBuf, queryPt.val]);
-                    neBuf = [];
-                } else {
-                    // Apply supplied negative to `where` and `ne` cursor method
-                    cursor = cursor.where(queryPt.key).ne(queryPt.val);
-                }
-            } else if (queryPt.type === 'nin') {
-                // Apply supplied values array to `where` and `nin` cursor method
-                cursor = cursor.where(queryPt.key).nin(queryPt.vals);
-            } else if (queryPt.type === 'in') {
-                // Apply supplied values array to `where` and `in` cursor method
-                cursor = cursor.where(queryPt.key).in(queryPt.vals);
-            } else if (queryPt.type === 'whereOr') {
-                // Apply supplied matches array to `or` cursor method
-                cursor = cursor.or(queryPt.matches);
-            } else if (queryPt.type === 'whereAnd') {
-                // Apply supplied matches array to `and` cursor method
-                cursor = cursor.and(queryPt.matches);
-            } else if (queryPt.type === 'limit') {
-                // Apply amt to `limit` cursor method
-                cursor = cursor.limit(queryPt.limitAmount);
-            } else if (queryPt.type === 'skip') {
-                // Apply amt to `skip` cursor method
-                cursor = cursor.skip(queryPt.skipAmount);
-            } else if (queryPt.type === 'sort') {
-                // Apply custom sort filter object to `sort` cursor method
-                cursor = cursor.sort({ [queryPt.sortKey]: queryPt.desc ? -1 : 1 });
-            } else if (queryPt.type === 'gt') {
-                // Apply key and max to `where` and `gt` cursor method
-                cursor = cursor.where(queryPt.key).gt(queryPt.min);
-            } else if (queryPt.type === 'lt') {
-                // Apply key and max to `where` and `lt` cursor method
-                cursor = cursor.where(queryPt.key).lt(queryPt.max);
-            } else if (queryPt.type === 'gte') {
-                // Apply key and max to `where` and `gte` cursor method
-                cursor = cursor.where(queryPt.key).gte(queryPt.min);
-            } else if (queryPt.type === 'lte') {
-                // Apply key and max to `where` and `lte` cursor method
-                cursor = cursor.where(queryPt.key).lte(queryPt.max);
-            }
-        }
-
-        // Return the fully constructed cursor
-        return cursor;
-    }
-
-    /**
-     * Find Model data by collection ID and Model ID
-     */
-    async findById(collectionId, id) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Find single Model instance data by provided ID
-        const rawModelRes = await mQuery.findOne({ _id: ObjectId(id) }).exec();
-
-        // If no Model instance data found, return null
-        if (rawModelRes == null) {
-            return null;
-        }
-
-        // Get internal ID from returned data
-        const fetchedModelId = rawModelRes._id.toString();
-
-        // Delete internal ID from the object
-        delete rawModelRes._id;
-
-        // Get remaining now sanitized Model instance data
-        const fetchedModelObject = rawModelRes;
-
-        // Return correctly structured fetched Model instance data
-        return {
-            id: fetchedModelId,
-            object: fetchedModelObject,
-        };
-    }
-
-    /**
-     * raw
-     *
-     * @param {*} collectionId
-     * @param {*} query
-     */
-    raw(collectionId, query) {
-        // Wait for building to finish
-        this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Fetch, map, and return found Model instance
-        // data found by cursor constructed from provided query
-        return this._queryToCursor(mQuery, query)._pipeline;
-    }
-
-    /**
-     * raw
-     *
-     * @param {*} collectionId
-     * @param {*} query
-     */
-    exec(collectionId, action, ...args) {
-        // Wait for building to finish
-        this.building;
-
-        // Construct MQuery cursor from collection ID
-        const collection = this._db.collection(collectionId);
-
-        // return promise
-        return new Promise((resolve, reject) => {
-            // execute
-            collection[action](...args).toArray((err, data) => {
-                // reject error
-                if (err) return reject(err);
-
-                // resolve
-                resolve(data);
-            });
+        // save/remove methods
+        ['save', 'replace', 'remove', 'refresh'].forEach((method) => {
+            // bind
+            this[method] = this[method].bind(this);
         });
     }
 
+
+    // ////////////////////////////////////////////////////////////////////////////
+    //
+    // INIT METHODS
+    //
+    // ////////////////////////////////////////////////////////////////////////////
+
     /**
-     * Find Model data by collection ID and constructed query
+     * returns raw db
      */
-    async find(collectionId, query) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Fetch, map, and return found Model instance
-        // data found by cursor constructed from provided query
-        return (await this._queryToCursor(mQuery, query).find().exec()).map(rawModelRes => {
-            // Get internal ID from returned data
-            const fetchedModelId = rawModelRes._id.toString();
-
-            // Delete internal ID from the object
-            delete rawModelRes._id;
-
-            // Get remaining now sanitized Model instance data
-            const fetchedModelObject = rawModelRes;
-
-            // Return correctly structured fetched Model instance data
-            return {
-                id: fetchedModelId,
-                object: fetchedModelObject,
-            };
-        });
+    static get db() {
+        // return db
+        return DATA.db;
     }
 
     /**
-     * Find single Model data by collection ID and Model ID
-     */
-    async findOne(collectionId, query) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Construct cursor from provided query, and use it to fetch single Model instance data
-        const rawModelRes = await this._queryToCursor(mQuery, query).findOne().exec();
-
-        // If no Model instance data found, return null
-        if (rawModelRes == null) {
-            return null;
-        }
-
-        // Get internal ID from returned data
-        const fetchedModelId = rawModelRes._id.toString();
-
-        // Delete internal ID from the object
-        delete rawModelRes._id;
-
-        // Get remaining now sanitized Model instance data
-        const fetchedModelObject = rawModelRes;
-
-        // Return correctly structured fetched Model instance data
-        return {
-            id: fetchedModelId,
-            object: fetchedModelObject,
-        };
-    }
-
-    /**
-     * Get count of Model data by collection ID and constructed query
-     */
-    async count(collectionId, query) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Construct cursor from provided query, and use it
-        // to fetch count of matching Model instance data
-        return await this._queryToCursor(mQuery, query).count().exec();
-    }
-
-    /**
-     * Get sum of data by provided key of all matching Model data
-     * by collection ID and constructed query
-     */
-    async sum(collectionId, query, key) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Construct cursor from provided query, and use it to get sum
-        // of data by provided key of all matching Model data
-        return await this._queryToCursor(mQuery, query).sum(`$${key}`).exec();
-    }
-
-    /**
-     * Remove matching Model data from database by collection ID and Model ID
-     */
-    async removeById(collectionId, id) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Find and remove single Model instance data by provided ID
-        await mQuery.findOneAndRemove({ _id: ObjectId(id) }).exec();
-    }
-
-    /**
-     * Remove matching Model data from database by collection ID and constructed query
-     */
-    async remove(collectionId, query) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Find and remove matching Model instance data by provided query
-        await this._queryToCursor(mQuery, query).deleteMany().exec();
-    }
-
-    /**
-     * Replace matching Model data from database by collection ID, Model ID, and replacement data
-     */
-    async replaceById(collectionId, id, newObject) {
-        // Wait for building to finish
-        await this.building;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Find and update Model instance data by provided ID and replacement object
-        await mQuery.where({ _id: ObjectId(id) }).setOptions({ overwrite: true })
-            .update(newObject).exec();
-    }
-
-    /**
-     * Update matching Model data from database by collection ID, Model ID, replacement data,
-     * and set of updated keys
-     */
-    async updateById(collectionId, id, newObject, updates) {
-        // Wait for building to finish
-        await this.building;
-
-        // Filter to only top level key updates
-        const topLevelUpdates = new Set(Array.from(updates).map(update => update.split('.')[0]));
-
-        // Create new object for storing only updated keys
-        const replaceObject = {};
-
-        // Create new object for storing only unset keys
-        const unsetObject = {};
-
-        // Iterate updated keys
-        for (const updatedKey of topLevelUpdates) {
-            if (newObject[updatedKey] != null) {
-                // Set replace object key-val to be from new object
-                replaceObject[updatedKey] = newObject[updatedKey];
-            } else {
-                // Set field on unset object to be key from new object
-                unsetObject[updatedKey] = 0;
-            }
-        }
-
-        // Set mongodb-special field for unsetting fields
-        if (Object.keys(unsetObject).length > 0) replaceObject.$unset = unsetObject;
-
-        // Construct MQuery cursor from collection ID
-        const mQuery = MQuery(this._db.collection(collectionId));
-
-        // Find and update Model instance data by provided ID and replacement object
-        await mQuery.where({ _id: ObjectId(id) }).update(replaceObject).exec();
-    }
-
-    /**
-     * Insert Model data from database by collection ID and return Model ID
-     */
-    async insert(collectionId, object) {
-        // Wait for building to finish
-        await this.building;
-
-        // Get DB collection from collection ID
-        const collection = this._db.collection(collectionId);
-
-        // Convert _id to ObjectId if present
-        if (object._id !== null && object._id !== undefined) {
-            object._id = ObjectId(object._id);
-        }
-
-        // Insert Model instance data into database and get inserted ID
-        const id = (await collection.insertOne(object)).insertedId.toString();
-
-        // Return ID of Model instance data in database
-        return id;
-    }
-
-
-    /**
-     * Set maximum returned Model instances
-     */
-    limit(amt) {
-        // Push query part for `limit` and return self
-        this.pts.push({ type: 'limit', limitAmount: amt });
-        return this;
-    }
-
-    /**
-     * Filter by if element matches in array
-     */
-    elem(arrKey, filter) {
-        // Push query part for `elem` and return self
-        this.pts.push({ type: 'elem', arrKey, filter });
-        return this;
-    }
-
-    /**
-     * Skip the first specified amount of returned Model instances
-     */
-    skip(amt) {
-        // Push query part for `skip` and return self
-        this.pts.push({ type: 'skip', skipAmount: amt });
-        return this;
-    }
-
-    /**
-     * Sort returned Model instances by a key and optional direction (default descending)
-     */
-    sort(key, directionStr = 'desc') {
-        // Ensure directionStr is a String value
-        directionStr = directionStr.toString();
-
-        // Create scoped variable for wether the order is descending or not
-        let desc = null;
-
-        // Parse directionStr into value to apply to `desc`
-        if (directionStr === '1' || directionStr === 'asc' || directionStr === 'ascending') {
-            // Sort by ascending
-            desc = false;
-        } else if (directionStr === '-1' || directionStr === 'desc' || directionStr === 'descending') {
-            // Sort by descending
-            desc = true;
-        } else {
-            // directionStr is unparseable, so throw error
-            throw new Error('Invalid sort value');
-        }
-
-        // Push query part for `sort` and return self
-        this.pts.push({ type: 'sort', sortKey: key, desc });
-        return this;
-    }
-
-    /**
-     * search
+     * init database
      *
+     * @param {*} plug 
+     */
+    static init(plug) {
+        // init database plug
+        DATA.db = new DB(plug);
+        DATA.plug = plug;
+    }
+
+    /**
+     * creates index
+     *
+     * @param {*} Model 
+     * @param {*} name 
+     * @param {*} indexes 
+     */
+    static async index(Model, name, indexes) {
+        // init database plug
+        return DATA.db.createIndex(Model, name, indexes);
+    }
+
+    /**
+     * creates index
+     *
+     * @param {*} Model 
+     * @param {*} name 
+     * @param {*} indexes 
+     */
+    static async createIndex(name, indexes) {
+        // init database plug
+        return DATA.db.createIndex(this, name, indexes);
+    }
+
+    /**
+     * registers collection
+     *
+     * @param {*} Model 
+     */
+    static async register(Model) {
+        // init database plug
+        return DATA.db.initCollection(Model);
+    }
+
+
+    // ////////////////////////////////////////////////////////////////////////////
+    //
+    // DATA METHODS
+    //
+    // ////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * gets value
+     *
+     * @param {*} key 
+     */
+    get(key) {
+        // return copied set of data
+        if (!key) {
+            return Object.assign({}, this.__data);
+        }
+
+        // return stringified id
+        if (key === '_id') {
+            return this.__id;
+        }
+
+        // return dotprop key
+        return dotProp.get(this.__data, key);
+    }
+
+    /**
+     * sets value
+     *
+     * @param {*} key 
      * @param {*} value 
      */
-    search(value) {
-        // add to where
-        this.pts.push({ type: 'filter', filter: { $text: { $search: value } } });
-        return this;
-    }
-
-    /**
-     * Filter only Model instances where the specified key matches
-     * the specified val, can also be given a filter object
-     */
-    where(key, value = null) {
-        // If only argument is an Object, handle as a filter object
+    set(key, value = null) {
+        // if object, set each key
         if (key instanceof Object && value == null) {
-            // Handle arg
-            const filter = key;
-            // Push query part for `filter` and return self
-            this.pts.push({ type: 'filter', filter: flatifyObj(filter) });
-            return this;
+            // keys map
+            Object.keys(key).forEach((k) => {
+                // set
+                this.set(k, key[k]);
+            });
+
+            // return
+            return;
         }
 
+        // add change to internal updates set
+        this.__updates.add(key);
 
-        // Push query part for `filter` and return self
-        this.pts.push({ type: 'filter', filter: { [key]: value } });
-        return this;
+        // set internal value selected by dot-prop key
+        dotProp.set(this.__data, key, value);
     }
 
     /**
-     * Filter only Model instances where the specified key does not match the specified val
+     * adds to field
+     *
+     * @param {*} key 
+     * @param {*} amt 
      */
-    ne(key, value) {
-        // Push query part for `ne` and return self
-        this.pts.push({ type: 'ne', val: value, key });
-        return this;
+    add(key, amt = '0.00') {
+        // get current value of prop selected by dot-prop key
+        let currValue = dotProp.get(this.__data, key) || '0.00';
+
+        // set amount
+        if (typeof amt === Number) amt = money.floatToAmount(amt);
+        if (typeof currValue === Number) currValue = money.floatToAmount(currValue);
+
+        // add change to internal updates set
+        this.__updates.add(key);
+
+        // set
+        dotProp.set(this.__data, key, money.add(amt, currValue));
     }
 
     /**
-     * Filter only Model instances where the specified keys do not match the specified val
+     * subtracts from field
+     *
+     * @param {*} key 
+     * @param {*} amt 
      */
-    nin(key, values) {
-        // Push query part for `nin` and return self
-        this.pts.push({ type: 'nin', vals: values, key });
-        return this;
+    subtract(key, amt = '0.00') {
+        // get current value of prop selected by dot-prop key
+        let currValue = dotProp.get(this.__data, key) || '0.00';
+
+        // set amount
+        if (typeof amt === Number) amt = money.floatToAmount(amt);
+        if (typeof currValue === Number) currValue = money.floatToAmount(currValue);
+
+        // add change to internal updates set
+        this.__updates.add(key);
+
+        // set
+        dotProp.set(this.__data, key, money.subtract(amt, currValue));
     }
 
     /**
-     * Filter only Model instances where the specified keys match the specified val
+     * unsets key
+     *
+     * @param {*} key 
      */
-    in(key, values) {
-        // Push query part for `in` and return self
-        this.pts.push({ type: 'in', vals: values, key });
-        return this;
+    unset(key = null) {
+        // if only argument is an Array, iterate it as array of keys to remove
+        if (key instanceof Array) {
+            // each
+            key.forEach((k) => {
+                dotProp.delete(this.__data, k);
+                this.__updates.add(k);
+            });
+
+            // return
+            return;
+        }
+
+        // delete prop by key
+        dotProp.delete(this.__data, key);
+
+        // add change to internal updates set
+        this.__updates.add(key);
     }
 
     /**
-     * Alias of `where`
+     * increments field
+     *
+     * @param {*} key 
+     * @param {*} amt 
      */
-    match(key, value = null) {
-        return this.where(key, value);
+    increment(key, amt = 1) {
+        // get current value of prop selected by dot-prop key
+        const currValue = dotProp.get(this.__data, key) || 0;
+
+        // set value of prop selected by dot-prop key to be plus the increment amount (default 1)
+        dotProp.set(this.__data, key, currValue + amt);
+
+        // add change to internal updates set
+        this.__updates.add(key);
     }
 
     /**
-     * Filter only Model instances by filter using multiple
-     * filter objects, where only one has to match
+     * decrement
+     *
+     * @param {*} key 
+     * @param {*} amt 
      */
-    or(...matches) {
-        // Push query part for `whereOr` and return self
-        this.pts.push({ type: 'whereOr', matches: matches.map(match => flatifyObj(match)) });
-        return this;
-    }
+    decrement(key, amt = 1) {
+        // get current value of prop selected by dot-prop key
+        const currValue = dotProp.get(this.__data, key) || 0;
 
+        // set value of prop selected by dot-prop key to be minus the increment amount (default 1)
+        dotProp.set(this.__data, key, currValue - amt);
 
-    /**
-     * Filter only Model instances by filter using multiple filter objects, where all have to match
-     */
-    and(...matches) {
-        // Push query part for `whereAnd` and return self
-        this.pts.push({ type: 'whereAnd', matches: matches.map(match => flatifyObj(match)) });
-        return this;
+        // Add change to internal updates set
+        this.__updates.add(key);
     }
 
     /**
-     * Only return Model instances where the value of the
-     * specified key is greater than the specified amount
+     * push to array
+     *
+     * @param {*} key 
+     * @param {*} val 
      */
-    gt(key, min) {
-        // Push query part for `gt` and return self
-        this.pts.push({ type: 'gt', min, key });
-        return this;
+    push(key, val) {
+        // Get current value of prop selected by dot-prop key
+        const currValue = dotProp.get(this.__data, key) || [];
+
+        // Ensure currValue is not an existing non-array field
+        assert.instanceOf(currValue, Array, "Can't push to non-array field");
+
+        // Push to array
+        currValue.push(val);
+
+        // Set value of prop to be array
+        dotProp.set(this.__data, key, currValue);
+
+        // Add change to internal updates set
+        this.__updates.add(key);
+    }
+
+
+    // ////////////////////////////////////////////////////////////////////////////
+    //
+    // PERSIST METHODS
+    //
+    // ////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * Save this Model instance's data updates to the database
+     */
+    async save() {
+        // call internal DB API to save changes to this Model instance
+        const id = await DATA.db.save(this, this.__updates, this.__id);
+
+        // set ID if ID returned
+        if (id != null) {
+            this.__id = id;
+        }
+
+        // reset internally stored updates
+        this.__updates = new Set();
     }
 
     /**
-     * Only return model instances where the value of the
-     * specified key is less than the specified amount
+     * Save this Model instance's data to the database
      */
-    lt(key, max) {
-        // Push query part for `lt` and return self
-        this.pts.push({ type: 'lt', max, key });
-        return this;
+    async replace() {
+        // Call internal DB API to replace this Model instance
+        const id = await DATA.db.replace(this, this.__id);
+
+        // set ID if ID returned
+        if (id != null) {
+            this.__id = id;
+        }
+
+        // reset internally stored updates
+        this.__updates = new Set();
     }
 
     /**
-     * Only return Model instances where the value of the specified
-     * key is greater or equal to than the specified amount
+     * Remove this Model instance's data from the database
      */
-    gte(key, min) {
-        // Push query part for `gte` and return self
-        this.pts.push({ type: 'gte', min, key });
-        return this;
+    async remove() {
+        // call internal DB API to remove the data associated with this Model instance by ID
+        await DATA.db.removeById(this.constructor, this.__id);
+
+        // nullify internal ID as no longer exists in database
+        this.__id = null;
     }
 
     /**
-     * Only return model instances where the value of the specified
-     * key is less than or equal to the specified amount
+     * Refresh this Model instance's internal data by re-fetching from the database
      */
-    lte(key, max) {
-        // Push query part for `lte` and return self
-        this.pts.push({ type: 'lte', max, key });
-        return this;
+    async refresh() {
+        // Replace this Model instance's internal data with fetched data from the database
+        this.__data = await DATA.db.findDataById(this.constructor, this.__id);
+
+        // Reset internally stored updates
+        this.__updates = new Set();
     }
 
+
+    // ////////////////////////////////////////////////////////////////////////////
+    //
+    // QUERY METHODS
+    //
+    // ////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * Create database query builder from self and associated DB API
+     */
+    static __query() {
+        // Return a newly constructed DbQuery given `this` and internal DB API
+        return new Query(this, DATA.db);
+    }
+
+    /**
+     * Find model by ID
+     */
+    static async findById(id) {
+        // Return model found by ID
+        return await DATA.db.findById(this, id);
+    }
+
+    /**
+     * Query-less database actions using simple filter
+     */
+    // Find Model instances by simple filter
+    static async exec(...args) { return await DATA.db.exec(this, ...args); }
+
+    // Find Model instances by simple filter
+    static async find(filter = {}) { return await this.__query().where(filter).find(); }
+
+    // Find single Model instance by simple filter
+    static async findOne(filter = {}) { return await this.__query().where(filter).findOne(); }
+
+    // Count stored Model instances by simple filter
+    static async count(filter = {}) { return await this.__query().where(filter).count(); }
+
+    // Sum stored Model instance values by simple filter
+    static async sum(key, filter = {}) { return await this.__query().where(filter).sum(key); }
+
+    // Remove stored Model instance by simple filter
+    static async remove(filter = {}) { return await this.__query().where(filter).remove(); }
+
+    /**
+     * Query constructor methods
+     */
+    // Create a query builder with initial `limit` set
+    static limit(...args) { return this.__query().limit(...args); }
+
+    // Create a query builder with initial `elem` set
+    static elem(...args) { return this.__query().elem(...args); }
+
+    // Create a query builder with initial `skip` set
+    static skip(...args) { return this.__query().skip(...args); }
+
+    // Create a query builder with initial `sort` set
+    static sort(...args) { return this.__query().sort(...args); }
+
+    // Create a query builder with initial `where` set
+    static where(...args) { return this.__query().where(...args); }
+
+    // Create a query builder with initial `ne` set
+    static ne(...args) { return this.__query().ne(...args); }
+
+    // Create a query builder with initial `nin` set
+    static nin(...args) { return this.__query().nin(...args); }
+
+    // Create a query builder with initial `in` set
+    static in(...args) { return this.__query().in(...args); }
+
+    // Create a query builder with initial `match` set
+    static match(...args) { return this.__query().match(...args); }
+
+    // Create a query builder with initial `or` set
+    static or(...args) { return this.__query().or(...args); }
+
+    // Create a query builder with initial `and` set
+    static and(...args) { return this.__query().and(...args); }
+
+    // Create a query builder with initial `gt` set
+    static gt(...args) { return this.__query().gt(...args); }
+
+    // Create a query builder with initial `lt` set
+    static lt(...args) { return this.__query().lt(...args); }
+
+    // Create a query builder with initial `gte` set
+    static gte(...args) { return this.__query().gte(...args); }
+
+    // Create a query builder with initial `lte` set
+    static lte(...args) { return this.__query().lte(...args); }
 }
 
-export default ModelMongo;
+// export model
+exports = module.exports = EdenModel;
