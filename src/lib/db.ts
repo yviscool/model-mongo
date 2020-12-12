@@ -1,7 +1,7 @@
 import ModelMongo from './query';
 
 // Require dependencies
-import pluralize from 'pluralize';
+import * as pluralize from 'pluralize';
 
 /**
  * Get the appropriate collection ID for a Model

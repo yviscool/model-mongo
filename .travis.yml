@@ -2,7 +2,7 @@ if: tag IS blank
 
 language: node_js
 node_js:
-- '10'
+- '14'
 
 cache:
   directories:
@@ -13,8 +13,16 @@ before_install:
   - npm i rollup typescript eslint nyc
   - npm install
 
+services:
+  - mongodb
 
 install: true
+
+before_script:
+  - mkdir -p data/db
+  - mongod --dbpath=data/db &
+  - sleep 5
+  - mongo mydb_test --eval 'db.createUser({user:"travis",pwd:"test",roles:["readWrite"]});'
 
 script:
   - npm run build

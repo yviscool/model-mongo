@@ -38,13 +38,13 @@ class Model extends EventEmitter {
         this.__id = id;
 
         // data methods
-        [ 'get', 'set', 'unset', 'push', 'add', 'subtract', 'increment', 'decrement' ].forEach(method => {
+        ['get', 'set', 'unset', 'push', 'add', 'subtract', 'increment', 'decrement'].forEach(method => {
             // bind
             this[method] = this[method].bind(this);
         });
 
         // save/remove methods
-        [ 'save', 'replace', 'remove', 'refresh' ].forEach(method => {
+        ['save', 'replace', 'remove', 'refresh'].forEach(method => {
             // bind
             this[method] = this[method].bind(this);
         });
@@ -59,7 +59,7 @@ class Model extends EventEmitter {
     /**
      * returns raw db
      */
-    static get db() {
+    static get db(): DB {
         // return db
         return DATA.db;
     }
@@ -120,7 +120,7 @@ class Model extends EventEmitter {
      *
      * @param {*} key
      */
-    get(key: string| object) {
+    get(key: string | object) {
         // return copied set of data
         if (!key) {
             return Object.assign({}, this.__data);

@@ -1,6 +1,6 @@
 
 // Require dependencies
-import MQuery from 'mquery';
+import * as MQuery from 'mquery';
 import { MongoClient, ObjectId, Db, Collection, DbCollectionOptions, MongoCallback } from 'mongodb';
 
 interface MongodbConfig {
@@ -120,12 +120,12 @@ class ModelMongo {
         let neBuf = [];
 
         // Iterate over all parts of the query
-        for (const [ queryPtKey, queryPt ] of query.pts.entries()) {
+        for (const [queryPtKey, queryPt] of query.pts.entries()) {
             if (queryPt.type === 'filter') {
                 const filter = Object.assign({}, queryPt.filter);
 
                 // Iterate all values in the filter object
-                for (const [ filterKey, filterVal ] of Object.entries(filter)) {
+                for (const [filterKey, filterVal] of Object.entries(filter)) {
                     // If value data is a RegExp match, handle seperately
                     if (filterVal instanceof RegExp) {
                         // Delete by key from filter object
@@ -155,7 +155,7 @@ class ModelMongo {
                 } else if (neBuf.length > 0) {
                     // Apply supplied negative match and previous
                     // matches array to `where` and `nin` cursor method
-                    cursor = cursor.where(queryPt.key).nin([ ...neBuf, queryPt.val ]);
+                    cursor = cursor.where(queryPt.key).nin([...neBuf, queryPt.val]);
                     neBuf = [];
                 } else {
                     // Apply supplied negative to `where` and `ne` cursor method
